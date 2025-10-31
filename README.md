@@ -5,7 +5,7 @@ This is prepared for my class "Interdisciplinary Study S1", Autumn 2025.
 Purpose of this demo
 ---------------------
 
-This demo is designed to illustrate a simple but important point in applied machine learning:
+This demo is designed to illustrate a simple but important point in applied machine learning using a simple synthetic dataset based on 2D triangles.
 
 - Raw data often contains multiple kinds of information (different "aspects"). For example, the six coordinates (x1,y1,x2,y2,x3,y3) encode absolute position, orientation, scale, and the triangle's intrinsic shape.
 - The prediction target (u, v or w) depends only on a subset of those aspects (or they have "invariance"). For instance, u (centroid sum) depends on position, v (area) depends on shape *and* scale, and w (angle-based) depends on shape but not scale.
