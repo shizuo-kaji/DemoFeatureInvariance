@@ -16,6 +16,11 @@ This idea connects to the manifold assumption: although raw inputs live in a hig
 
 Use this demo to experiment with different representations and to see how domain-driven abstraction affects regression quality.
 
+
+## Demo on Google Colab
+
+Open [this notebook](colab_regression_demo.ipynb) in Google Colab to run the demo without local setup.
+
 Requirements
 ------------
 
