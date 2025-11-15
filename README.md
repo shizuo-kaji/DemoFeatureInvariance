@@ -2,12 +2,25 @@
 
 This is prepared for my class "Interdisciplinary Study S1", Autumn 2025.
 
-Purpose of this demo
----------------------
+## Purpose of this demo
 
-This demo is designed to illustrate a simple but important point in applied machine learning using a simple synthetic dataset based on 2D triangles.
+This demo is designed to illustrate a simple but important point in applied machine learning using a synthetic dataset based on 2D triangles.
 
-- Raw data often contains multiple kinds of information (different "aspects"). For example, the six coordinates (x1,y1,x2,y2,x3,y3) encode absolute position, orientation, scale, and the triangle's intrinsic shape.
+If you would like to tackle the task independently without any hints:
+
+- Please refer only to the training dataset **triangle_dataset_train.csv** and the test dataset **triangle_dataset_test.csv**.
+- Your goal is to perform regression using the six columns **(x1, y1, x2, y2, x3, y3)** as explanatory variables to predict the target variables **u, v, w**.
+- Build your own model and evaluate it using the R^2 score on the test dataset.
+
+## Key idea: representation and task-relevant information
+The dataset is constructed as follows: each data point represents a triangle in 2D defined by three points p1, p2, p3 with coordinates (x1,y1), (x2,y2), (x3,y3). The target variables are derived features of the triangle:
+- u: sum of centroid coordinates = (x_centroid + y_centroid)
+- v: area of the triangle
+- w: sum of squared angles at the three vertices (angles in radians, squared and summed)
+
+The key learning point of this demo is how the choice of input representation (features) affects regression performance depending on the target variable.
+- Raw data often contains multiple kinds of information (different "aspects").
+In this example, the six coordinates (x1,y1,x2,y2,x3,y3) encode absolute position, orientation, scale, and the triangle's intrinsic shape.
 - The prediction target (u, v or w) depends only on a subset of those aspects (or they have "invariance"). For instance, u (centroid sum) depends on position, v (area) depends on shape *and* scale, and w (angle-based) depends on shape but not scale.
 - Domain knowledge lets us build representations that emphasize the target-relevant aspects. The `--preprocess congruent` and `--preprocess similar` options are simple examples: they remove nuisance variability (translation, rotation, or also scale) so the learner sees a representation closer to the information the target depends on.
 - If the preprocessing preserves the necessary information (the assumption is correct), learning becomes easier and model performance improves. If preprocessing removes information the target actually needs, performance will degrade — this trade-off is visible in the experiment results.
@@ -21,8 +34,8 @@ Use this demo to experiment with different representations and to see how domain
 
 Open [this notebook](colab_regression_demo.ipynb) in Google Colab to run the demo without local setup.
 
-Requirements
-------------
+
+## Local setup
 
 Install required Python packages listed in `requirements.txt`:
 
@@ -32,7 +45,7 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-## Triangle dataset generator
+### Triangle dataset generator
 
 This simple script generates a CSV file where each row is a sample consisting of three 2D points (a triangle) and three derived features.
 
@@ -51,7 +64,7 @@ python generate_triangle_dataset.py --n 1000 --output triangle_dataset.csv --see
 
 This writes `triangle_dataset.csv` with 1000 non-degenerate triangles sampled uniformly in the box [-10,10] x [-10,10]. Triangles with area smaller than `--min-area` are rejected and resampled.
 
-## Regression models
+### Regression models
 
 There's a demonstration script that trains several regressors to predict the derived features (u, v, w) from the six point coordinates.
 
@@ -63,8 +76,7 @@ Basic usage (single CSV, internal train/test split):
 python regression/regression_demo.py --csv triangle_dataset.csv --out regression_demo_out --test-size 0.2 --seed 0
 ```
 
-Use a separate test CSV
------------------------
+### Use a separate test CSV
 
 If you'd like to provide a separate test dataset (for example `triangle_dataset_train.csv` and `triangle_dataset_test.csv`), use the `--csv-test` option. When present, the script will train on `--csv` and evaluate on `--csv-test` (no internal split is performed):
 
@@ -76,8 +88,13 @@ python regression/regression_demo.py \
 	--seed 0
 ```
 
-Preprocessing options
----------------------
+### Output
+
+- `regression_demo_out/regression_results.csv`: table of MSE, MAE, and R2 for each (target, regressor).
+- `regression_demo_out/pred_vs_true_{target}_{regressor}.png`: scatter plots of predicted vs true values with a y=x reference line.
+
+
+## Preprocessing options
 
 The demo supports an optional preprocessing step that normalizes triangle coordinates before training/evaluation.
 
@@ -92,14 +109,6 @@ Example (similar preprocessing):
 ```bash
 python regression/regression_demo.py --csv triangle_dataset.csv --preprocess similar --out out_sim
 ```
-
-
-Output
-------
-
-- `regression_demo_out/regression_results.csv`: table of MSE, MAE, and R2 for each (target, regressor).
-- `regression_demo_out/pred_vs_true_{target}_{regressor}.png`: scatter plots of predicted vs true values with a y=x reference line.
-
 
 ## Discussion of results
 
