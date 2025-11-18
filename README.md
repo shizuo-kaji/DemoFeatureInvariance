@@ -107,7 +107,7 @@ The demo supports an optional preprocessing step that normalizes triangle coordi
 Example (similar preprocessing):
 
 ```bash
-python regression/regression_demo.py --csv triangle_dataset.csv --preprocess similar --out out_sim
+python regression/regression_demo.py 	--csv triangle_dataset_train.csv --csv-test triangle_dataset_test.csv --preprocess similar --out regression_demo_out/similar
 ```
 
 ## Discussion of results

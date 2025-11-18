@@ -19,7 +19,7 @@ import seaborn as sns
 from sklearn.compose import TransformedTargetRegressor
 from sklearn.ensemble import RandomForestRegressor
 from sklearn.linear_model import LinearRegression, Ridge
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score
+from sklearn.metrics import mean_absolute_error, root_mean_squared_error, mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 from sklearn.neural_network import MLPRegressor
 from sklearn.pipeline import Pipeline
@@ -36,55 +36,11 @@ REGRESSORS = {
     "RandomForest": RandomForestRegressor(n_estimators=100, random_state=0),
     "SVR": SVR(C=1.0, kernel="rbf"),
     "KNN": KNeighborsRegressor(n_neighbors=5),
-    "MLP": MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=1000, random_state=0),
+    "MLP": MLPRegressor(hidden_layer_sizes=(64, 32), max_iter=5000, random_state=0),
 }
 
 
-# ---------- Geometry helpers for preprocessing and target recomputation ----------
-def _dist(xa: float, ya: float, xb: float, yb: float) -> float:
-    return np.hypot(xa - xb, ya - yb)
-
-
-def _area_triangle_row(row) -> float:
-    x1, y1, x2, y2, x3, y3 = (row["x1"], row["y1"], row["x2"], row["y2"], row["x3"], row["y3"])
-    return abs((x1*(y2-y3) + x2*(y3-y1) + x3*(y1-y2)) / 2.0)
-
-
-def _centroid_sum_row(row) -> float:
-    cx = (row["x1"] + row["x2"] + row["x3"]) / 3.0
-    cy = (row["y1"] + row["y2"] + row["y3"]) / 3.0
-    return cx + cy
-
-
-def _sum_squared_angles_row(row) -> float:
-    x1, y1, x2, y2, x3, y3 = (row["x1"], row["y1"], row["x2"], row["y2"], row["x3"], row["y3"])
-    a = _dist(x2, y2, x3, y3)
-    b = _dist(x1, y1, x3, y3)
-    c = _dist(x1, y1, x2, y2)
-    # handle degenerate
-    if a == 0 or b == 0 or c == 0:
-        return float("nan")
-
-    def _safe_acos(val: float) -> float:
-        return math.acos(max(-1.0, min(1.0, val)))
-
-    A = _safe_acos((b*b + c*c - a*a) / (2*b*c))
-    B = _safe_acos((a*a + c*c - b*b) / (2*a*c))
-    C = _safe_acos((a*a + b*b - c*c) / (2*a*b))
-    return A*A + B*B + C*C
-
-
-def _recompute_targets_from_coords(df_coords: pd.DataFrame, target: str) -> pd.Series:
-    # df_coords has columns x1,y1,x2,y2,x3,y3
-    if target == "u":
-        return df_coords.apply(_centroid_sum_row, axis=1)
-    elif target == "v":
-        return df_coords.apply(_area_triangle_row, axis=1)
-    elif target == "w":
-        return df_coords.apply(_sum_squared_angles_row, axis=1)
-    else:
-        raise ValueError(f"Unknown target for recompute: {target}")
-
+# ---------- Geometry helpers for preprocessing and target computation ----------
 
 def _apply_preprocess_row(row, mode: str):
     # return transformed coordinate tuple (x1,y1,x2,y2,x3,y3) as floats
@@ -115,7 +71,7 @@ def _apply_preprocess_row(row, mode: str):
             r2y = -r2y
             r3y = -r3y
 
-        return (0.0, 0.0, float(r2x), float(r2y), float(r3x), float(r3y))
+        return (float(r2x), float(r3x), float(r3y))
 
     elif mode == "similar":
         # scale so p2 at (1,0) after rotation
@@ -144,7 +100,7 @@ def _apply_preprocess_row(row, mode: str):
             r2y = -r2y
             r3y = -r3y
 
-        return (0.0, 0.0, float(r2x), float(r2y), float(r3x), float(r3y))
+        return (float(r3x), float(r3y))
 
     else:
         # none or unknown: return original
@@ -156,7 +112,7 @@ def _apply_preprocess_df(df_coords: pd.DataFrame, mode: str) -> pd.DataFrame:
         return df_coords.copy()
 
     cols = ["x1", "y1", "x2", "y2", "x3", "y3"]
-    transformed = df_coords.apply(lambda r: pd.Series(_apply_preprocess_row(r, mode), index=cols), axis=1)
+    transformed = df_coords.apply(lambda r: pd.Series(_apply_preprocess_row(r, mode)), axis=1)
     return transformed
 
 
@@ -223,10 +179,10 @@ def build_pipeline(regressor):
 
 def evaluate_model(model, X_test: pd.DataFrame, y_test: pd.Series):
     y_pred = model.predict(X_test)
-    mse = mean_squared_error(y_test, y_pred)
+    rmse = root_mean_squared_error(y_test, y_pred)
     mae = mean_absolute_error(y_test, y_pred)
     r2 = r2_score(y_test, y_pred)
-    return mse, mae, r2, y_pred
+    return rmse, mae, r2, y_pred
 
 
 def plot_pred_vs_true(y_true: np.ndarray, y_pred: np.ndarray, outpath: str, title: str):
@@ -286,6 +242,7 @@ def run_demo(csv_path: str, out_dir: str, csv_test: str, test_size: float, rando
         X_train, X_test = train_test_split(X, test_size=test_size, random_state=random_seed)
 
     # For each target, train each regressor separately and report metrics
+    #print(X.head())
     for target in targets:
         # Prepare target vectors depending on preprocessing mode
         if csv_test:
@@ -307,12 +264,12 @@ def run_demo(csv_path: str, out_dir: str, csv_test: str, test_size: float, rando
             # Fit
             pipe.fit(X_train, y_train)
 
-            mse, mae, r2, y_pred = evaluate_model(pipe, X_test, y_test)
+            rmse, mae, r2, y_pred = evaluate_model(pipe, X_test, y_test)
 
             results.append({
                 "target": target,
                 "regressor": reg_name,
-                "MSE": mse,
+                "RMSE": rmse,
                 "MAE": mae,
                 "R2": r2,
             })
@@ -321,10 +278,10 @@ def run_demo(csv_path: str, out_dir: str, csv_test: str, test_size: float, rando
             fname = f"pred_vs_true_{target}_{reg_name}.png"
             plot_pred_vs_true(y_test.values, y_pred, os.path.join(out_dir, fname), f"{target} - {reg_name}")
 
-            print(f"Trained {reg_name} for target {target}: MSE={mse:.4g}, MAE={mae:.4g}, R2={r2:.4g}")
+            print(f"Trained {reg_name} for target {target}: RMSE={rmse:.4g}, MAE={mae:.4g}, R2={r2:.4g}")
 
     results_df = pd.DataFrame(results)
-    results_df = results_df.sort_values(["target", "MSE"]).reset_index(drop=True)
+    results_df = results_df.sort_values(["target", "RMSE"]).reset_index(drop=True)
     results_df.to_csv(os.path.join(out_dir, "regression_results.csv"), index=False)
     print("\nSummary saved to:", os.path.join(out_dir, "regression_results.csv"))
     print("Plots saved to:", out_dir)
