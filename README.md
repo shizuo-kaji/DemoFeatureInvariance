@@ -21,13 +21,13 @@ You are given a dataset of triangles. Each triangle is defined by 3 points in 2D
 Your goal is to predict three different target variables from these coordinates:
 1.  **$u$ (Position)**: The sum of the centroid coordinates $(x_c + y_c)$. Depends on **absolute position**.
 2.  **$v$ (Area)**: The area of the triangle. Depends on **shape and scale** (invariant to position/rotation).
-3.  **$w$ (Shape)**: The sum of squared angles at the vertices. Depends only on **intrinsic shape** (invariant to position, rotation, and scale).
+3.  **$w$ (Shape)**: The ratio of inradius to circumradius ($r/R$). Depends only on **intrinsic shape** (invariant to position, rotation, and scale).
 
 ### The Challenge
 Before running the code, ask yourself:
 *   Can a Linear Regression model predict the Area ($v$) from raw coordinates?
 *   If we remove all information about position (center the triangles), what happens to our ability to predict $u$?
-*   Which representation is best for predicting angles ($w$)?
+*   Which representation is best for predicting the inradius/circumradius ratio ($w$)?
 
 ---
 
@@ -97,12 +97,36 @@ Below is a summary of what you typically observe. Use this to verify your unders
 | :--- | :--- | :--- |
 | **$u$ (Centroid)** | `none` (Raw Coords) | $u$ is a linear function of coordinates. Any preprocessing that removes position destroys the signal. |
 | **$v$ (Area)** | `congruent` or `length` | Area is independent of position/rotation but depends on scale. `congruent` simplifies the task by fixing position. `length` captures scale directly. `similar` and `angle` fail because they remove scale. |
-| **$w$ (Angles)** | `angle` | The target is directly derived from angles. `similar` and `congruent` also work well because they expose the shape clearly. |
+| **$w$ (Inradius/Circumradius)** | `similar` or `angle` | The target ($r/R$) depends only on shape. `similar` normalizes scale and position, exposing shape. `angle` works because $r/R$ can be expressed in terms of angles. |
 
 ### Key Takeaways for Applied ML
 1.  **Don't blindly preprocess**: Removing "noise" (like position) is only good if your target doesn't depend on it.
 2.  **Domain Knowledge is Power**: If you know your target depends only on shape, use shape-based features (angles/ratios) to make the model's job easier.
 3.  **Model vs. Data**: A simple model (Linear Regression) with the right features (squared terms for area, or explicit lengths) can outperform a complex model (Neural Net) on raw data.
+
+---
+
+## Generating Your Own Dataset
+
+You can generate custom triangle datasets using `generate_triangle_dataset.py`.
+
+```bash
+python generate_triangle_dataset.py --n 2000 --seed 1 --noise 0.1 --output triangle_dataset_train.csv
+python generate_triangle_dataset.py --n 500 --seed 2 --noise 0.1 --output triangle_dataset_test.csv
+```
+
+### Options
+| Option | Default | Description |
+| :--- | :--- | :--- |
+| `--n` | 1000 | Number of triangle samples to generate |
+| `--output` | `triangle_dataset.csv` | Output CSV file path |
+| `--seed` | None | Random seed for reproducibility |
+| `--xmin` | -1.0 | Minimum x coordinate |
+| `--xmax` | 1.0 | Maximum x coordinate |
+| `--ymin` | -1.0 | Minimum y coordinate |
+| `--ymax` | 1.0 | Maximum y coordinate |
+| `--min-area` | 1e-6 | Minimum triangle area (rejects degenerate triangles) |
+| `--noise` | 0.1 | Standard deviation of Gaussian noise added to $u$, $v$, $w$ |
 
 ---
 

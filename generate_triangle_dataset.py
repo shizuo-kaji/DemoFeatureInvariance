@@ -8,7 +8,7 @@ Columns:
 Definitions / assumptions:
   - u: sum of centroid coordinates = (x1+x2+x3)/3 + (y1+y2+y3)/3
   - v: triangle area (absolute, via shoelace)
-  - w: sum of squared angles (in radians^2) at the three vertices
+  - w: ratio of inradius to circumradius (r/R)
 
 Triangles with (near-)zero area are rejected and resampled.
 """
@@ -34,8 +34,15 @@ def dist(xa: float, ya: float, xb: float, yb: float) -> float:
     return math.hypot(xa - xb, ya - yb)
 
 
-def sum_squared_angles(x1: float, y1: float, x2: float, y2: float, x3: float, y3: float) -> Optional[float]:
-    # Sides: a opposite point1 (between p2 and p3), b opposite point2, c opposite point3
+def inradius_circumradius_ratio(x1: float, y1: float, x2: float, y2: float, x3: float, y3: float) -> Optional[float]:
+    """
+    Compute the ratio of inradius (r) to circumradius (R) for a triangle.
+
+    r = Area / s  (where s is the semi-perimeter)
+    R = (a * b * c) / (4 * Area)
+    r / R = 4 * Area^2 / (s * a * b * c)
+    """
+    # Side lengths
     a = dist(x2, y2, x3, y3)
     b = dist(x1, y1, x3, y3)
     c = dist(x1, y1, x2, y2)
@@ -44,19 +51,14 @@ def sum_squared_angles(x1: float, y1: float, x2: float, y2: float, x3: float, y3
     if a == 0 or b == 0 or c == 0:
         return None
 
-    # Law of cosines for angle at point1: cosA = (b^2 + c^2 - a^2) / (2*b*c)
-    def safe_acos(x: float) -> float:
-        # clamp to [-1,1]
-        return math.acos(max(-1.0, min(1.0, x)))
-
-    try:
-        A = safe_acos((b*b + c*c - a*a) / (2*b*c))
-        B = safe_acos((a*a + c*c - b*b) / (2*a*c))
-        C = safe_acos((a*a + b*b - c*c) / (2*a*b))
-    except ValueError:
+    area = area_triangle(x1, y1, x2, y2, x3, y3)
+    if area == 0:
         return None
 
-    return A*A + B*B + C*C
+    s = (a + b + c) / 2.0  # semi-perimeter
+
+    # r/R = 4 * Area^2 / (s * a * b * c)
+    return (4.0 * area * area) / (s * a * b * c)
 
 
 def generate_sample(xmin: float, xmax: float, ymin: float, ymax: float, min_area: float, max_attempts: int=100) -> Tuple[float, float, float, float, float, float]:
@@ -75,7 +77,7 @@ def generate_sample(xmin: float, xmax: float, ymin: float, ymax: float, min_area
     return x1, y1, x2, y2, x3, y3
 
 
-def make_dataset(n: int, output: str, seed: Optional[int], xmin: float, xmax: float, ymin: float, ymax: float, min_area: float) -> None:
+def make_dataset(n: int, output: str, seed: Optional[int], xmin: float, xmax: float, ymin: float, ymax: float, min_area: float, noise: float) -> None:
     if seed is not None:
         random.seed(seed)
 
@@ -89,10 +91,14 @@ def make_dataset(n: int, output: str, seed: Optional[int], xmin: float, xmax: fl
             x1, y1, x2, y2, x3, y3 = generate_sample(xmin, xmax, ymin, ymax, min_area)
             u = centroid_sum(x1, y1, x2, y2, x3, y3)
             v = area_triangle(x1, y1, x2, y2, x3, y3)
-            w = sum_squared_angles(x1, y1, x2, y2, x3, y3)
-            # If angles computation failed (shouldn't for valid area), set NaN
+            w = inradius_circumradius_ratio(x1, y1, x2, y2, x3, y3)
+            # If ratio computation failed (shouldn't for valid area), set NaN
             if w is None:
                 w = float('nan')
+            # Add noise to u, v, w
+            u += random.gauss(0, noise)
+            v += random.gauss(0, noise)
+            w += random.gauss(0, noise)
 
             writer.writerow([f"{x1:.8f}", f"{y1:.8f}", f"{x2:.8f}", f"{y2:.8f}", f"{x3:.8f}", f"{y3:.8f}", f"{u:.8f}", f"{v:.8f}", f"{w:.8f}"])
 
@@ -107,9 +113,10 @@ def parse_args():
     p.add_argument("--ymin", type=float, default=-1.0, help="min y coordinate")
     p.add_argument("--ymax", type=float, default=1.0, help="max y coordinate")
     p.add_argument("--min-area", type=float, default=1e-6, help="minimum allowed triangle area (reject smaller)")
+    p.add_argument("--noise", type=float, default=0.1, help="standard deviation of Gaussian noise added to u,v,w")
     return p.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    make_dataset(args.n, args.output, args.seed, args.xmin, args.xmax, args.ymin, args.ymax, args.min_area)
+    make_dataset(args.n, args.output, args.seed, args.xmin, args.xmax, args.ymin, args.ymax, args.min_area, args.noise)
